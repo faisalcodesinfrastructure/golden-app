@@ -1,54 +1,42 @@
-# golden-app
+# golden-app — Airline Booking API
 
-Sample application for the Platform Engineering Golden Path workshop.
-
-This repo is what a developer receives from the Backstage Scaffolder template.
-It contains a Go airline booking API, PostgreSQL database, Helm chart,
-and GitHub Actions CI pipeline.
+Platform Engineering Golden Path — Phase 2
 
 ---
 
-## Structure (built across phases)
+## What this is
 
-```
-golden-app/
-├── cmd/server/main.go      Phase 2 — Go HTTP server
-├── internal/db/            Phase 2 — PostgreSQL queries
-├── internal/handlers/      Phase 2 — HTTP handlers
-├── Dockerfile              Phase 2 — multi-stage container build
-├── go.mod / go.sum         Phase 2 — Go module
-├── helm/golden-app/        Phase 2 — Helm chart
-│   ├── Chart.yaml
-│   ├── values.yaml         image.tag updated by CI on every push
-│   └── templates/
-└── .github/workflows/
-    └── ci.yaml             Phase 4 — GitHub Actions CI
-```
+A Go airline booking API backed by PostgreSQL. This is the application
+a developer receives when they use the Backstage Scaffolder template.
 
----
-
-## API (Phase 2)
+## API endpoints
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/health` | `{"status":"ok","db":"ok"}` |
+| GET | `/health` | Liveness check — `{"status":"ok","db":"ok"}` |
 | GET | `/flights` | List all flights |
 | POST | `/flights` | Create a flight |
 | GET | `/flights/{id}` | Get one flight |
-| GET | `/flights/{id}/seats` | List available seats |
+| GET | `/flights/{id}/seats` | List seats (add `?available=true` to filter) |
 | POST | `/bookings` | Book a seat |
-| GET | `/bookings/{id}` | Get a booking |
+| GET | `/bookings/{ref}` | Get a booking by reference |
 
----
+## Local development
 
-## Phase instructions
+```bash
+# Prerequisites: PostgreSQL running locally
+export DATABASE_URL="postgres://app:dev-password-change-in-production@localhost:5432/airlinedb?sslmode=disable"
 
-Phase 2 instructions are added to this README in Phase 2.
-Phase 4 CI instructions are in `.github/README.md` (added in Phase 4).
+# Run
+go run ./cmd/server
 
----
+# Test
+curl http://localhost:8080/health
+curl http://localhost:8080/flights
+```
 
-## What is next
+## Deployment
 
-Complete Phase 0 and Phase 1 first.
-Phase 2 instructions: return here after Phase 1 is complete.
+Push to main → GitHub Actions builds image → updates values.yaml → Flux deploys.
+
+Access via Traefik: `http://golden-app.127.0.0.1.nip.io:8080/flights`

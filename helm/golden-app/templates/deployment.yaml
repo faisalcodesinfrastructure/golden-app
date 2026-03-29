@@ -1,0 +1,188 @@
+# =============================================================================
+# Deployment — golden-app airline API
+# Location: golden-app/helm/golden-app/templates/deployment.yaml
+#
+# A Deployment manages a set of identical pods. Kubernetes ensures the
+# desired number of replicas are always running, restarting pods that fail.
+# =============================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  # {{ .Release.Name }} is the Helm release name — set at helm install time
+  name: {{ .Release.Name }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: {{ .Release.Name }}
+    managed-by: helm
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}
+    spec:
+      # Run as the ServiceAccount created by OpenTofu in Phase 1
+      # This gives the pod the RBAC permissions defined in the Role
+      serviceAccountName: {{ .Values.serviceAccountName }}
+
+      # Security context for the pod — applies to all containers
+      securityContext:
+        # Run as non-root user (matches Dockerfile USER nonroot)
+        runAsNonRoot: true
+        # UID 65532 is the nonroot user in distroless images
+        runAsUser: 65532
+        # Prevent privilege escalation attacks
+        seccompProfile:
+          type: RuntimeDefault
+
+      containers:
+        - name: golden-app
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+
+          # Environment variables injected from the Secret created in Phase 1.
+          # The pod never has the password hardcoded — it reads from the Secret.
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  # Name of the Secret created by OpenTofu
+                  name: {{ .Values.dbSecretName }}
+                  key: DATABASE_URL
+            - name: PORT
+              value: "8080"
+
+          # Liveness probe — Kubernetes restarts the container if this fails
+          # Checks that the HTTP server is responding
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            # Wait 15 seconds before first check — gives the app time to start
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            failureThreshold: 3
+
+          # Readiness probe — Kubernetes stops sending traffic if this fails
+          # Same endpoint but different semantics:
+          #   liveness: is the container alive?
+          #   readiness: is the container ready to serve traffic?
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3
+
+          # Resource requests and limits from values.yaml
+          resources:
+            requests:
+              cpu: {{ .Values.resources.requests.cpu }}
+              memory: {{ .Values.resources.requests.memory }}
+            limits:
+              cpu: {{ .Values.resources.limits.cpu }}
+              memory: {{ .Values.resources.limits.memory }}
+
+      # Schedule on app nodes, not shared-services
+      nodeSelector:
+        {{- toYaml .Values.nodeSelector | nindent 8 }}
+
+---
+# =============================================================================
+# Deployment — PostgreSQL
+# =============================================================================
+# PostgreSQL runs as a StatefulSet in production but for local development
+# a Deployment is simpler and sufficient.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-postgresql
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: {{ .Release.Name }}-postgresql
+    managed-by: helm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-postgresql
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-postgresql
+    spec:
+      containers:
+        - name: postgresql
+          image: {{ .Values.postgresql.image }}
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - name: postgres
+              containerPort: 5432
+
+          # PostgreSQL reads credentials from the same Secret as the app
+          env:
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.dbSecretName }}
+                  key: DB_NAME
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.dbSecretName }}
+                  key: DB_USERNAME
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.dbSecretName }}
+                  key: DB_PASSWORD
+            - name: PGDATA
+              # PostgreSQL stores data in this directory inside the container
+              # It must be inside the mounted PVC path
+              value: /var/lib/postgresql/data/pgdata
+
+          # Mount the PVC created by OpenTofu in Phase 1
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+          livenessProbe:
+            exec:
+              # pg_isready checks if PostgreSQL is accepting connections
+              command: ["pg_isready", "-U", "app", "-d", "airlinedb"]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "app", "-d", "airlinedb"]
+            initialDelaySeconds: 15
+            periodSeconds: 5
+
+      volumes:
+        - name: postgres-data
+          persistentVolumeClaim:
+            # Reference the PVC created by OpenTofu
+            claimName: {{ .Values.postgresql.pvcName }}
+
+      nodeSelector:
+        {{- toYaml .Values.nodeSelector | nindent 8 }}

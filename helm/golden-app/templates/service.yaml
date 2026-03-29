@@ -1,0 +1,54 @@
+# =============================================================================
+# Services — internal cluster networking
+# Location: golden-app/helm/golden-app/templates/service.yaml
+#
+# A Service gives a stable DNS name and IP to a set of pods.
+# Pods are ephemeral — they come and go with new IPs each time.
+# A Service always points to the right pods via label selectors.
+# =============================================================================
+
+# Service for the airline API
+# Traefik routes external traffic to this Service via the Ingress rule
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: {{ .Release.Name }}
+    managed-by: helm
+spec:
+  # ClusterIP: only reachable inside the cluster
+  # Traefik sits in front and routes from localhost:8080 to this Service
+  type: {{ .Values.service.type }}
+  selector:
+    # Routes traffic to pods with this label
+    # Matches the label on the Deployment pod template
+    app: {{ .Release.Name }}
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: {{ .Values.service.targetPort }}
+      protocol: TCP
+
+---
+# Service for PostgreSQL
+# Used by the airline app to connect to the database
+# The hostname golden-app-postgresql resolves to this Service inside the cluster
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-postgresql
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: {{ .Release.Name }}-postgresql
+    managed-by: helm
+spec:
+  type: ClusterIP
+  selector:
+    app: {{ .Release.Name }}-postgresql
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+      protocol: TCP

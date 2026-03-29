@@ -1,0 +1,23 @@
+# =============================================================================
+# Helm Chart metadata
+# Location: golden-app/helm/golden-app/Chart.yaml
+#
+# Chart.yaml describes the chart — its name, version, and what it deploys.
+# There are two version fields:
+#   version:    the chart version — bump when you change the chart structure
+#   appVersion: the application version — updated by CI on every build
+# =============================================================================
+
+apiVersion: v2
+name: golden-app
+description: Airline booking API — Platform Engineering Golden Path workshop
+type: application
+
+# Chart version — follows semver. Bump the minor version when adding
+# new templates, bump patch for fixes to existing templates.
+version: 0.1.0
+
+# Application version — the Docker image tag that will be deployed.
+# This is updated automatically by the GitHub Actions CI pipeline
+# on every push to main. Flux detects the change and redeploys.
+appVersion: "latest"

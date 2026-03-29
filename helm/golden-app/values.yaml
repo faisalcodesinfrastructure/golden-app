@@ -1,0 +1,73 @@
+# =============================================================================
+# Helm default values
+# Location: golden-app/helm/golden-app/values.yaml
+#
+# These are the default values for the chart.
+# They can be overridden at install time with --set or --values.
+# The CI pipeline updates image.tag on every successful build.
+# =============================================================================
+
+# Container image configuration
+image:
+  repository: ghcr.io/faisalcodesinfrastructure/golden-app
+  # tag is updated by GitHub Actions CI on every push to main
+  # Format: sha-<git-commit-sha>
+  tag: "latest"
+  # IfNotPresent: only pull if the image is not already on the node
+  # Always: always pull — use this when tag is 'latest' in production
+  pullPolicy: IfNotPresent
+
+# Number of app replicas
+# We use 1 for local development — in production use 2+ for redundancy
+replicaCount: 1
+
+# Service configuration — how the app is exposed inside the cluster
+service:
+  type: ClusterIP    # Internal only — Traefik routes external traffic to it
+  port: 80           # Port the Service listens on
+  targetPort: 8080   # Port the container listens on
+
+# Ingress — Traefik routing rule to expose the app externally
+ingress:
+  enabled: true
+  # The hostname Traefik will route to this service
+  # For local Kind development we use the nip.io magic DNS service
+  # 127.0.0.1.nip.io always resolves to 127.0.0.1 (localhost)
+  host: golden-app.127.0.0.1.nip.io
+
+# Resource requests and limits
+# requests: minimum resources guaranteed to the pod
+# limits: maximum resources the pod can consume
+resources:
+  requests:
+    cpu: 100m      # 100 millicores = 0.1 CPU core
+    memory: 128Mi  # 128 mebibytes
+  limits:
+    cpu: 500m      # 500 millicores = 0.5 CPU core
+    memory: 256Mi  # 256 mebibytes
+
+# The namespace created by OpenTofu in Phase 1
+namespace: golden-app
+
+# The ServiceAccount created by OpenTofu in Phase 1
+serviceAccountName: app
+
+# The Secret created by OpenTofu containing database credentials
+dbSecretName: golden-app-db-credentials
+
+# PostgreSQL configuration
+postgresql:
+  # The name of the PVC created by OpenTofu in Phase 1
+  pvcName: golden-app-postgres-data
+  # Docker image for PostgreSQL
+  image: postgres:16-alpine
+  # Database name — must match what is in the Secret
+  database: airlinedb
+
+# Node selector — target the app nodes (not shared-services)
+# This aligns with the node topology we set up in Phase 0
+nodeSelector:
+  node-role: app
+
+# Tolerations — app nodes have no taint so none needed here
+tolerations: []

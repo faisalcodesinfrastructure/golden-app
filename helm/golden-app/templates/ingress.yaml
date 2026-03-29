@@ -1,0 +1,47 @@
+# =============================================================================
+# Ingress — external routing via Traefik
+# Location: golden-app/helm/golden-app/templates/ingress.yaml
+#
+# An Ingress rule tells Traefik how to route external HTTP requests
+# to the airline API Service inside the cluster.
+#
+# Traffic flow:
+#   curl http://golden-app.127.0.0.1.nip.io:8080/flights
+#     → your Mac port 8080
+#     → Kind port mapping → control-plane container port 80
+#     → Traefik (running on control-plane node)
+#     → Ingress rule matches host golden-app.127.0.0.1.nip.io
+#     → forwards to golden-app Service port 80
+#     → golden-app pod port 8080
+#
+# nip.io is a magic DNS service — golden-app.127.0.0.1.nip.io
+# always resolves to 127.0.0.1 (localhost). No /etc/hosts editing needed.
+# =============================================================================
+
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: {{ .Release.Name }}
+    managed-by: helm
+  annotations:
+    # Tell Traefik this Ingress uses the traefik IngressClass
+    # Since we set isDefaultClass=true during install this is optional
+    # but explicit is better than implicit
+    kubernetes.io/ingress.class: traefik
+spec:
+  rules:
+    - host: {{ .Values.ingress.host }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}
+                port:
+                  number: {{ .Values.service.port }}
+{{- end }}
