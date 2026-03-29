@@ -12,7 +12,7 @@ image:
   repository: ghcr.io/faisalcodesinfrastructure/golden-app
   # tag is updated by GitHub Actions CI on every push to main
   # Format: sha-<git-commit-sha>
-  tag: "latest"
+  tag: "sha-73ea819"
   # IfNotPresent: only pull if the image is not already on the node
   # Always: always pull — use this when tag is 'latest' in production
   pullPolicy: IfNotPresent
